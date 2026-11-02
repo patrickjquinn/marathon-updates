@@ -1,13 +1,18 @@
 #!/usr/bin/env python3
 """Sign and check Reef's catalogues for Marathon.
 
-  reef-catalogue sign   site/reef/<arch>/catalogue.json --gnupghome DIR
-  reef-catalogue verify site/reef/*/catalogue.json [--key keys/marathon-reef.asc]
+  reef-catalogue sign   site/reef/<arch>/catalogue-full.json --gnupghome DIR
+  reef-catalogue verify site/reef/*/ [--key keys/marathon-reef.asc]
 
-`sign` checks the catalogue, stamps `generated_at` and a `revision` higher
-than the one it replaces, rewrites it in canonical form and writes the
-detached ASCII signature `catalogue.json.asc` beside it. `verify` checks
-the same rules and that signature against the public key, as CI does on
+catalogue-full.json is the catalogue: Reef reads it. catalogue.json beside
+it is the same without the install kinds that Reefs from before the
+`marathon` kind reject whole; they read only that file.
+
+`sign` checks catalogue-full.json, stamps `generated_at` and a `revision`
+higher than the one it replaces, rewrites it in canonical form, writes
+catalogue.json from it, and signs both (`<file>.asc`, detached, ASCII).
+`verify` checks the same rules, that catalogue.json is catalogue-full.json
+less those kinds, and both signatures against the public key, as CI does on
 every push. The format is Marathon-Shell's docs/reef/marathon-catalogue.md.
 """
 
@@ -23,10 +28,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 KEY = ROOT / "keys" / "marathon-reef.asc"
 ARCHES = ("aarch64", "x86_64")
-# What the Reef in shipped images parses. An entry of any other kind makes
-# that Reef refuse the whole catalogue, so a new kind is added here only
-# once a Reef that understands it is on every image the feed serves.
-INSTALL_KINDS = {"flatpak": ("remote", "ref"), "android": ("package",)}
+FULL = "catalogue-full.json"
+COMPAT = "catalogue.json"
+INSTALL_KINDS = {"flatpak": ("remote", "ref"), "android": ("package",),
+                 "marathon": ("app_id", "url", "sha256", "min_image")}
+# What Reefs from before the `marathon` kind parse: any other kind makes
+# them refuse the whole catalogue, so catalogue.json carries only these.
+COMPAT_KINDS = ("flatpak", "android")
+APPS_URL = "https://github.com/patrickjquinn/marathon-updates/releases/download/apps/{arch}/"
 REQUIRED = {"name": str, "version": str, "title": str, "summary": str,
             "tested_on": list, "licence": dict}
 LICENCE_MODELS = ("free", "one_off", "subscription")
@@ -34,7 +43,7 @@ APP_ID = re.compile(r"^[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)+$")
 ASSET = re.compile(r"^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$")
 
 
-def problems(path, cat):
+def problems(path, cat, kinds=tuple(INSTALL_KINDS)):
     arch = path.parent.name
     out = []
     if cat.get("schema") != 1:
@@ -71,11 +80,20 @@ def problems(path, cat):
                     out.append(f"{who}: licence.purchase_url must be https://")
         install = p.get("install")
         if install is not None:
-            fields = INSTALL_KINDS.get(install.get("kind") if isinstance(install, dict) else None)
-            if fields is None:
-                out.append(f"{who}: install.kind must be one of {', '.join(INSTALL_KINDS)}")
+            kind = install.get("kind") if isinstance(install, dict) else None
+            if kind not in kinds:
+                out.append(f"{who}: install.kind must be one of {', '.join(kinds)}")
             else:
-                out += [f"{who}: install.{f} is missing" for f in fields if not install.get(f)]
+                out += [f"{who}: install.{f} is missing" for f in INSTALL_KINDS[kind] if not install.get(f)]
+            if kind == "marathon":
+                if install.get("app_id") != who:
+                    out.append(f"{who}: install.app_id must be the package's name")
+                if not str(install.get("url", "")).startswith(APPS_URL.format(arch=arch)):
+                    out.append(f"{who}: install.url must be on the release apps/{arch}")
+                if not re.fullmatch(r"[0-9a-f]{64}", str(install.get("sha256", ""))):
+                    out.append(f"{who}: install.sha256 must be 64 lower-case hex digits")
+                if not re.fullmatch(r"[0-9]+", str(install.get("min_image", ""))):
+                    out.append(f"{who}: install.min_image must be an IMAGE_VERSION")
         for rel in [p.get("icon")] + list(p.get("screenshots", [])):
             if rel is None:
                 continue
@@ -93,6 +111,16 @@ def problems(path, cat):
 
 def canonical(cat):
     return (json.dumps(cat, indent=2, ensure_ascii=False) + "\n").encode()
+
+
+def compat(cat):
+    """The catalogue less the packages Reefs from before `marathon` reject."""
+    out = dict(cat)
+    out["packages"] = [p for p in cat["packages"]
+                       if p.get("install") is None or p["install"].get("kind") in COMPAT_KINDS]
+    names = {p["name"] for p in out["packages"]}
+    out["featured"] = [n for n in cat.get("featured", []) if n in names]
+    return out
 
 
 def gpgv(path, key):
@@ -117,17 +145,7 @@ def load(path):
         sys.exit(f"reef-catalogue: {path}: {e}")
 
 
-def sign(args):
-    path = Path(args.catalogue).resolve()
-    cat = load(path)
-    previous = cat.get("revision", 0) if isinstance(cat.get("revision"), int) else 0
-    now = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)
-    cat["revision"] = max(previous + 1, int(now.timestamp()))
-    cat["generated_at"] = now.isoformat().replace("+00:00", "Z")
-    found = problems(path, cat)
-    if found:
-        sys.exit("reef-catalogue: not signed:\n  " + "\n  ".join(found))
-    path.write_bytes(canonical(cat))
+def gpg_sign(args, path):
     sig = path.with_name(path.name + ".asc")
     cmd = ["gpg", "--batch", "--quiet", "--homedir", args.gnupghome, "--yes", "--armor",
            "--detach-sign", "--output", str(sig)]
@@ -137,16 +155,38 @@ def sign(args):
     if not gpgv(path, args.key):
         sys.exit(f"reef-catalogue: the new signature does not verify with {args.key}; "
                  "is --gnupghome the catalogue key's home?")
-    print(f"signed {path} (revision {cat['revision']})")
+
+
+def sign(args):
+    path = Path(args.catalogue).resolve()
+    if path.name != FULL:
+        sys.exit(f"reef-catalogue: sign {FULL}; it writes {COMPAT} from it")
+    cat = load(path)
+    previous = cat.get("revision", 0) if isinstance(cat.get("revision"), int) else 0
+    now = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)
+    cat["revision"] = max(previous + 1, int(now.timestamp()))
+    cat["generated_at"] = now.isoformat().replace("+00:00", "Z")
+    found = problems(path, cat)
+    if found:
+        sys.exit("reef-catalogue: not signed:\n  " + "\n  ".join(found))
+    path.write_bytes(canonical(cat))
+    path.with_name(COMPAT).write_bytes(canonical(compat(cat)))
+    for p in (path, path.with_name(COMPAT)):
+        gpg_sign(args, p)
+    print(f"signed {path} and {COMPAT} (revision {cat['revision']})")
 
 
 def verify(args):
     failed = False
-    for name in args.catalogues:
-        path = Path(name).resolve()
-        found = problems(path, load(path))
-        if not gpgv(path, args.key):
-            found.append(f"{path.name}.asc is missing or not a good signature by {args.key}")
+    for name in args.directories:
+        full_path, compat_path = Path(name).resolve() / FULL, Path(name).resolve() / COMPAT
+        full, old = load(full_path), load(compat_path)
+        found = problems(full_path, full) + [f"{COMPAT}: {p}" for p in problems(compat_path, old, COMPAT_KINDS)]
+        if canonical(old) != canonical(compat(full)):
+            found.append(f"{COMPAT} is not {FULL} less the kinds older Reefs reject: sign again")
+        for p in (full_path, compat_path):
+            if not gpgv(p, args.key):
+                found.append(f"{p.name}.asc is missing or not a good signature by {args.key}")
         for p in found:
             print(f"{name}: {p}", file=sys.stderr)
         failed |= bool(found)
@@ -165,7 +205,7 @@ def main():
     s.add_argument("--key", default=str(KEY), help="public key to check the result with")
     s.set_defaults(run=sign)
     v = sub.add_parser("verify", help="check catalogues and their signatures")
-    v.add_argument("catalogues", nargs="+")
+    v.add_argument("directories", nargs="+", help="site/reef/<arch>/")
     v.add_argument("--key", default=str(KEY))
     v.set_defaults(run=verify)
     args = parser.parse_args()

@@ -18,7 +18,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Reef catalogues are well formed and signed by keys/marathon-reef.asc
-        run: python3 -I tools/reef-catalogue verify site/reef/*/catalogue.json
+        run: python3 -I tools/reef-catalogue verify site/reef/*/
 
   feeds:
     runs-on: ubuntu-24.04

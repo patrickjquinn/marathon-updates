@@ -70,13 +70,16 @@ GitHub Pages serves `site/` at https://patrickjquinn.github.io/marathon-updates/
 Reef reads:
 
 ```
-https://patrickjquinn.github.io/marathon-updates/reef/<arch>/catalogue.json
-https://patrickjquinn.github.io/marathon-updates/reef/<arch>/catalogue.json.asc
+https://patrickjquinn.github.io/marathon-updates/reef/<arch>/catalogue-full.json
+https://patrickjquinn.github.io/marathon-updates/reef/<arch>/catalogue-full.json.asc
 ```
 
-`<arch>` is `aarch64` or `x86_64`.
+`<arch>` is `aarch64` or `x86_64`. Reefs from before the `marathon` install
+kind read `catalogue.json` instead. They reject a whole catalogue that holds
+a kind they don't know, so `catalogue.json` is `catalogue-full.json` without
+those entries. `tools/reef-catalogue sign` writes it and signs both files.
 
-- **The signature** is a detached ASCII GnuPG signature by
+- **The signature** (`<file>.asc`) is a detached ASCII GnuPG signature by
   [`keys/marathon-reef.asc`](keys/marathon-reef.asc). This is the scheme
   Reef's Sailfish OS store uses for its index.
 - **Revision.** `revision` must never go backwards, so a replayed older
@@ -86,14 +89,16 @@ https://patrickjquinn.github.io/marathon-updates/reef/<arch>/catalogue.json.asc
 
 Icons and screenshots go in `site/reef/<arch>/assets/`.
 
-**Installable kinds.** The validator accepts only the install kinds that the
-Reef shipped in images can parse: `flatpak` and `android`. An entry of any
-other kind would make that Reef reject the whole catalogue.
+**Installable kinds.** `flatpak`, `android` and `marathon`; `catalogue.json`
+carries only the first two. A later Reef lists an unknown kind and doesn't
+install it, so a new kind breaks nothing from then on.
 
-**Marathon's own apps.** Signed `.marathon` packages of the apps the image
-ships but Reef updates will go on a release `apps/<arch>`. That needs Reef
-and marathon-apps work first; Marathon-Shell's
-`docs/reef/marathon-catalogue.md`, "Reef-updated Marathon apps", has the plan.
+**Marathon's own apps.** The release `apps/<arch>` holds signed `.marathon`
+packages of the apps the image ships but Reef updates. Each package has a
+`.minisig` beside it, by Marathon's app key. Each `marathon` entry names the
+package's URL there, its SHA-256 and `min_image`, the oldest image it runs
+on. Marathon-Shell's `scripts/reef/publish-apps` builds, signs and uploads
+them, and adds the entries to `catalogue-full.json`.
 
 ## Publishing (on the publisher's machine)
 
@@ -123,8 +128,8 @@ scripts/ota/marathon-ota publish --image-dir <mkosi.output>/<image id> --version
 **The Reef catalogue.**
 
 ```sh
-$EDITOR site/reef/aarch64/catalogue.json
-tools/reef-catalogue sign site/reef/aarch64/catalogue.json --gnupghome ~/.marathon-secrets/reef/gnupg
+$EDITOR site/reef/aarch64/catalogue-full.json
+tools/reef-catalogue sign site/reef/aarch64/catalogue-full.json --gnupghome ~/.marathon-secrets/reef/gnupg
 git commit -am "reef: ..." && git push
 ```
 
