@@ -89,6 +89,11 @@ Icons and screenshots go in `site/reef/<arch>/assets/`.
 Reef shipped in images can parse: `flatpak` and `android`. An entry of any
 other kind would make that Reef reject the whole catalogue.
 
+**Marathon's own apps.** Signed `.marathon` packages of the apps the image
+ships but Reef updates will go on a release `apps/<arch>`. That needs Reef
+and marathon-apps work first; Marathon-Shell's
+`docs/reef/marathon-catalogue.md`, "Reef-updated Marathon apps", has the plan.
+
 ## Publishing (on the publisher's machine)
 
 **Keys.** The private keys never leave the publisher's machine:
