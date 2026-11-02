@@ -23,7 +23,8 @@ Each device and channel has one rolling release, tagged `<channel>/<image id>`:
 | Device | Stable feed | Test feed |
 |---|---|---|
 | Zinwa Q25 | `stable/zinwa-q25_marathon_edge` | `test/zinwa-q25_marathon_edge` |
-| HackberryPi CM5 / Raspberry Pi 5 | `stable/raspberry-pi5_marathon_edge` | `test/raspberry-pi5_marathon_edge` |
+| HackberryPi CM5 | `stable/hackberrypi-cm5_marathon_edge` | `test/hackberrypi-cm5_marathon_edge` |
+| Raspberry Pi 5 (plain) | `stable/raspberry-pi5_marathon_edge` | `test/raspberry-pi5_marathon_edge` |
 | QEMU dev-sim (A/B) | `stable/qemu-aarch64_marathon_edge` | `test/qemu-aarch64_marathon_edge` |
 
 - **Test feeds** are pre-releases. They are for the developers' own phones.
