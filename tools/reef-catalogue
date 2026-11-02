@@ -1,0 +1,176 @@
+#!/usr/bin/env python3
+"""Sign and check Reef's catalogues for Marathon.
+
+  reef-catalogue sign   site/reef/<arch>/catalogue.json --gnupghome DIR
+  reef-catalogue verify site/reef/*/catalogue.json [--key keys/marathon-reef.asc]
+
+`sign` checks the catalogue, stamps `generated_at` and a `revision` higher
+than the one it replaces, rewrites it in canonical form and writes the
+detached ASCII signature `catalogue.json.asc` beside it. `verify` checks
+the same rules and that signature against the public key, as CI does on
+every push. The format is Marathon-Shell's docs/reef/marathon-catalogue.md.
+"""
+
+import argparse
+import datetime
+import json
+import re
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+KEY = ROOT / "keys" / "marathon-reef.asc"
+ARCHES = ("aarch64", "x86_64")
+# What the Reef in shipped images parses. An entry of any other kind makes
+# that Reef refuse the whole catalogue, so a new kind is added here only
+# once a Reef that understands it is on every image the feed serves.
+INSTALL_KINDS = {"flatpak": ("remote", "ref"), "android": ("package",)}
+REQUIRED = {"name": str, "version": str, "title": str, "summary": str,
+            "tested_on": list, "licence": dict}
+LICENCE_MODELS = ("free", "one_off", "subscription")
+APP_ID = re.compile(r"^[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)+$")
+ASSET = re.compile(r"^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$")
+
+
+def problems(path, cat):
+    arch = path.parent.name
+    out = []
+    if cat.get("schema") != 1:
+        out.append("schema must be 1")
+    if cat.get("release") != "marathon":
+        out.append('release must be "marathon"')
+    if cat.get("arch") != arch or arch not in ARCHES:
+        out.append(f"arch must be {arch!r}, the directory it is in (one of {', '.join(ARCHES)})")
+    if not isinstance(cat.get("revision"), int) or cat["revision"] < 1:
+        out.append("revision must be a positive integer (sign sets it)")
+    packages = cat.get("packages")
+    if not isinstance(packages, list):
+        return out + ["packages must be a list"]
+    names = [p.get("name") for p in packages if isinstance(p, dict)]
+    for name in sorted({n for n in names if names.count(n) > 1}):
+        out.append(f"{name}: listed twice")
+    for p in packages:
+        if not isinstance(p, dict):
+            out.append("every package must be an object")
+            continue
+        who = p.get("name", "?")
+        for key, kind in REQUIRED.items():
+            if not isinstance(p.get(key), kind):
+                out.append(f"{who}: {key} must be a {kind.__name__}")
+        licence = p.get("licence", {})
+        if isinstance(licence, dict):
+            model = licence.get("model")
+            if model not in LICENCE_MODELS:
+                out.append(f"{who}: licence.model must be one of {', '.join(LICENCE_MODELS)}")
+            elif model != "free":
+                if not APP_ID.match(str(licence.get("app_id", ""))):
+                    out.append(f"{who}: licence.app_id is not an app id")
+                if not str(licence.get("purchase_url", "")).startswith("https://"):
+                    out.append(f"{who}: licence.purchase_url must be https://")
+        install = p.get("install")
+        if install is not None:
+            fields = INSTALL_KINDS.get(install.get("kind") if isinstance(install, dict) else None)
+            if fields is None:
+                out.append(f"{who}: install.kind must be one of {', '.join(INSTALL_KINDS)}")
+            else:
+                out += [f"{who}: install.{f} is missing" for f in fields if not install.get(f)]
+        for rel in [p.get("icon")] + list(p.get("screenshots", [])):
+            if rel is None:
+                continue
+            if not isinstance(rel, str) or not ASSET.match(rel) or ".." in rel.split("/"):
+                out.append(f"{who}: {rel!r} is not a path inside the catalogue's directory")
+            elif not (path.parent / rel).is_file():
+                out.append(f"{who}: {rel} is not in {path.parent}")
+        if len(p.get("screenshots", [])) > 5:
+            out.append(f"{who}: at most 5 screenshots")
+    for name in cat.get("featured", []):
+        if name not in names:
+            out.append(f"featured {name!r} is not a package")
+    return out
+
+
+def canonical(cat):
+    return (json.dumps(cat, indent=2, ensure_ascii=False) + "\n").encode()
+
+
+def gpgv(path, key):
+    """True when catalogue.json.asc is a good signature over path by key alone."""
+    sig = path.with_name(path.name + ".asc")
+    if not sig.is_file():
+        return False
+    with tempfile.TemporaryDirectory() as tmp:
+        keyring = Path(tmp) / "reef.gpg"
+        with open(key, "rb") as armored, open(keyring, "wb") as out:
+            subprocess.run(["gpg", "--batch", "--dearmor"], stdin=armored, stdout=out, check=True)
+        r = subprocess.run(["gpgv", "--status-fd", "1", "--keyring", str(keyring), str(sig), str(path)],
+                           capture_output=True, text=True)
+    tokens = {line.split()[1] for line in r.stdout.splitlines() if line.startswith("[GNUPG:] ")}
+    return r.returncode == 0 and {"GOODSIG", "VALIDSIG"} <= tokens
+
+
+def load(path):
+    try:
+        return json.loads(path.read_bytes())
+    except (OSError, ValueError) as e:
+        sys.exit(f"reef-catalogue: {path}: {e}")
+
+
+def sign(args):
+    path = Path(args.catalogue).resolve()
+    cat = load(path)
+    previous = cat.get("revision", 0) if isinstance(cat.get("revision"), int) else 0
+    now = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)
+    cat["revision"] = max(previous + 1, int(now.timestamp()))
+    cat["generated_at"] = now.isoformat().replace("+00:00", "Z")
+    found = problems(path, cat)
+    if found:
+        sys.exit("reef-catalogue: not signed:\n  " + "\n  ".join(found))
+    path.write_bytes(canonical(cat))
+    sig = path.with_name(path.name + ".asc")
+    cmd = ["gpg", "--batch", "--quiet", "--homedir", args.gnupghome, "--yes", "--armor",
+           "--detach-sign", "--output", str(sig)]
+    if args.key_id:
+        cmd += ["--local-user", args.key_id]
+    subprocess.run(cmd + [str(path)], check=True)
+    if not gpgv(path, args.key):
+        sys.exit(f"reef-catalogue: the new signature does not verify with {args.key}; "
+                 "is --gnupghome the catalogue key's home?")
+    print(f"signed {path} (revision {cat['revision']})")
+
+
+def verify(args):
+    failed = False
+    for name in args.catalogues:
+        path = Path(name).resolve()
+        found = problems(path, load(path))
+        if not gpgv(path, args.key):
+            found.append(f"{path.name}.asc is missing or not a good signature by {args.key}")
+        for p in found:
+            print(f"{name}: {p}", file=sys.stderr)
+        failed |= bool(found)
+        if not found:
+            print(f"{name}: ok")
+    sys.exit(1 if failed else 0)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = parser.add_subparsers(dest="command", required=True)
+    s = sub.add_parser("sign", help="stamp, check and sign a catalogue")
+    s.add_argument("catalogue")
+    s.add_argument("--gnupghome", required=True, help="GnuPG home holding the catalogue key")
+    s.add_argument("--key-id", help="signing key (default: the home's default key)")
+    s.add_argument("--key", default=str(KEY), help="public key to check the result with")
+    s.set_defaults(run=sign)
+    v = sub.add_parser("verify", help="check catalogues and their signatures")
+    v.add_argument("catalogues", nargs="+")
+    v.add_argument("--key", default=str(KEY))
+    v.set_defaults(run=verify)
+    args = parser.parse_args()
+    args.run(args)
+
+
+if __name__ == "__main__":
+    main()

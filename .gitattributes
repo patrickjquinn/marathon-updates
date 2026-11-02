@@ -1,0 +1,3 @@
+# Signatures cover these files' exact bytes.
+site/reef/*/catalogue.json -text
+site/reef/*/catalogue.json.asc -text

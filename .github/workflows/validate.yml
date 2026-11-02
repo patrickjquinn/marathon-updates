@@ -1,0 +1,30 @@
+name: validate
+
+on:
+  push:
+  pull_request:
+  release:
+    types: [published, edited, prereleased, released]
+  schedule:
+    - cron: "17 5 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  catalogue:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reef catalogues are well formed and signed by keys/marathon-reef.asc
+        run: python3 -I tools/reef-catalogue verify site/reef/*/catalogue.json
+
+  feeds:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: OS update feeds are signed by keys/marathon-ota.asc and complete
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 -I tools/check-feeds
