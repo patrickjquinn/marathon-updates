@@ -16,14 +16,14 @@ jobs:
   catalogue:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Reef catalogues are well formed and signed by keys/marathon-reef.asc
         run: python3 -I tools/reef-catalogue verify site/reef/*/
 
   feeds:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: OS update feeds are signed by keys/marathon-ota.asc and complete
         env:
           GH_TOKEN: ${{ github.token }}
