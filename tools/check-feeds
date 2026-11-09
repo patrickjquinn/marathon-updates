@@ -19,7 +19,7 @@ import re
 import subprocess
 import sys
 import tempfile
-import urllib.request
+import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -31,9 +31,16 @@ ASSET_MAX = 2 * 1024**3 - 1
 FETCH_MAX = 16 * 1024**2
 
 
-def fetch(url):
-    with urllib.request.urlopen(url, timeout=60) as r:
-        return r.read()
+def fetch(repo, asset):
+    """An asset's bytes through the API, as the token's user: anonymous
+    downloads are the first to time out when GitHub is overloaded."""
+    for attempt in range(4):
+        r = subprocess.run(["gh", "api", "-H", "Accept: application/octet-stream",
+                            f"repos/{repo}/releases/assets/{asset['id']}"], capture_output=True)
+        if r.returncode == 0:
+            return r.stdout
+        time.sleep(5 * (attempt + 1))
+    raise RuntimeError(f"cannot fetch {asset['name']}: {r.stderr.decode().strip()}")
 
 
 def good_signature(data, sig, keyring):
@@ -47,7 +54,7 @@ def good_signature(data, sig, keyring):
     return r.returncode == 0 and {"GOODSIG", "VALIDSIG"} <= tokens
 
 
-def check(release, keyring):
+def check(release, keyring, repo):
     tag = release["tag_name"]
     channel, image_id = TAG.match(tag).groups()
     out = []
@@ -57,9 +64,8 @@ def check(release, keyring):
     for name in SIGNED + (CATALOG,):
         if name not in assets:
             return out + [f"no {name}"]
-    base = release["html_url"].replace("/releases/tag/", "/releases/download/") + "/"
-    sums = fetch(base + "SHA256SUMS")
-    if not good_signature(sums, fetch(base + "SHA256SUMS.gpg"), keyring):
+    sums = fetch(repo, assets["SHA256SUMS"])
+    if not good_signature(sums, fetch(repo, assets["SHA256SUMS.gpg"]), keyring):
         out.append("SHA256SUMS.gpg is not a good signature by the OTA key")
     listed = {}
     for line in sums.decode().splitlines():
@@ -73,11 +79,11 @@ def check(release, keyring):
         if asset["size"] > ASSET_MAX:
             out.append(f"{name} is over 2 GiB")
         if name in listed and asset["size"] <= FETCH_MAX:
-            if hashlib.sha256(fetch(base + name)).hexdigest() != listed[name]:
+            if hashlib.sha256(fetch(repo, asset)).hexdigest() != listed[name]:
                 out.append(f"{name} does not match its checksum")
     versions = {m.group(1) for n in listed
                 if (m := re.match(re.escape(image_id) + r"_([^._+]+)\.", n)) and not n.endswith(".notes")}
-    catalog = ET.fromstring(fetch(base + CATALOG))
+    catalog = ET.fromstring(fetch(repo, assets[CATALOG]))
     released = {r.get("version") for r in catalog.iter("release")}
     if released != versions:
         out.append(f"{CATALOG} lists {sorted(released)}, SHA256SUMS has {sorted(versions)}")
@@ -102,7 +108,7 @@ def main():
             subprocess.run(["gpg", "--batch", "--dearmor"], stdin=armored, stdout=out, check=True)
         feeds = [r for r in releases if TAG.match(r["tag_name"]) and not r["draft"]]
         for release in sorted(feeds, key=lambda r: r["tag_name"]):
-            found = check(release, keyring)
+            found = check(release, keyring, args.repo)
             for p in found:
                 print(f"{release['tag_name']}: {p}", file=sys.stderr)
             if not found:
