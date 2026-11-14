@@ -21,6 +21,7 @@ import sys
 import tempfile
 import time
 import xml.etree.ElementTree as ET
+from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -29,6 +30,10 @@ SIGNED = ("SHA256SUMS", "SHA256SUMS.gpg")
 CATALOG = "marathon-os.metainfo.xml"
 ASSET_MAX = 2 * 1024**3 - 1
 FETCH_MAX = 16 * 1024**2
+# A publish uploads the new version's files before the manifest that lists
+# them, so the runs its uploads trigger see them unlisted for a while. One
+# still unlisted after this long is left over from a publish that stopped.
+PUBLISH_WINDOW = 30 * 60
 
 
 def fetch(repo, asset):
@@ -41,6 +46,16 @@ def fetch(repo, asset):
             return r.stdout
         time.sleep(5 * (attempt + 1))
     raise RuntimeError(f"cannot fetch {asset['name']}: {r.stderr.decode().strip()}")
+
+
+def uploading(asset):
+    """Uploaded within PUBLISH_WINDOW: part of a publish still under way."""
+    stamp = asset.get("updated_at") or asset.get("created_at") or ""
+    try:
+        uploaded = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    return (datetime.now(timezone.utc) - uploaded).total_seconds() < PUBLISH_WINDOW
 
 
 def good_signature(data, sig, keyring):
@@ -72,7 +87,10 @@ def check(release, keyring, repo):
         digest, _, name = line.partition("  ")
         listed[name] = digest
     for name in sorted(set(assets) - set(listed) - set(SIGNED)):
-        out.append(f"{name} is an asset but not in SHA256SUMS")
+        if uploading(assets[name]):
+            print(f"{tag}: {name} is being published (not in SHA256SUMS yet)")
+        else:
+            out.append(f"{name} is an asset but not in SHA256SUMS")
     for name in sorted(set(listed) - set(assets)):
         out.append(f"{name} is in SHA256SUMS but not an asset")
     for name, asset in sorted(assets.items()):
