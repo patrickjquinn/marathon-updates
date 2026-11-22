@@ -3,7 +3,197 @@
   "release": "marathon",
   "arch": "aarch64",
   "featured": [],
-  "packages": [],
-  "revision": 1793658428,
-  "generated_at": "2026-11-02T22:27:08Z"
+  "packages": [
+    {
+      "name": "calculator",
+      "version": "1.0.0.2611221122",
+      "title": "Calculator",
+      "summary": "Work out sums, percentages and other calculations",
+      "category": "Utility",
+      "tested_on": [],
+      "publisher": "Marathon",
+      "licence": {
+        "model": "free"
+      },
+      "size": 126231,
+      "icon": "assets/calculator-1.0.0.2611221122.png",
+      "install": {
+        "kind": "marathon",
+        "app_id": "calculator",
+        "url": "https://github.com/patrickjquinn/marathon-updates/releases/download/apps/aarch64/calculator-1.0.0.2611221122.marathon",
+        "sha256": "db787b3fad933406afd04e2534960a940b61dda737fd73dc1b640134148970a6",
+        "min_image": "26112202"
+      }
+    },
+    {
+      "name": "calendar",
+      "version": "1.0.0.2611221122",
+      "title": "Calendar",
+      "summary": "Your events and appointments: see what's on and add new ones",
+      "category": "Productivity",
+      "tested_on": [],
+      "publisher": "Marathon",
+      "licence": {
+        "model": "free"
+      },
+      "size": 185106,
+      "icon": "assets/calendar-1.0.0.2611221122.png",
+      "install": {
+        "kind": "marathon",
+        "app_id": "calendar",
+        "url": "https://github.com/patrickjquinn/marathon-updates/releases/download/apps/aarch64/calendar-1.0.0.2611221122.marathon",
+        "sha256": "f0918975f5675a8932b49ec9b52eee7245cfd14f22debae2cabe1af173aa1e1b",
+        "min_image": "26112202"
+      }
+    },
+    {
+      "name": "email",
+      "version": "1.0.0.2611221122",
+      "title": "Mail",
+      "summary": "Read, search and write email",
+      "category": "Productivity",
+      "tested_on": [],
+      "publisher": "Marathon",
+      "licence": {
+        "model": "free"
+      },
+      "size": 214021,
+      "icon": "assets/email-1.0.0.2611221122.png",
+      "install": {
+        "kind": "marathon",
+        "app_id": "email",
+        "url": "https://github.com/patrickjquinn/marathon-updates/releases/download/apps/aarch64/email-1.0.0.2611221122.marathon",
+        "sha256": "7846d4c36dcc0125abe6bbb1f104ee676f7bbe7596bb6a8ca09c9757df60c8d8",
+        "min_image": "26112202"
+      }
+    },
+    {
+      "name": "gallery",
+      "version": "1.0.0.2611221122",
+      "title": "Gallery",
+      "summary": "Your photos and videos",
+      "category": "Entertainment",
+      "tested_on": [],
+      "publisher": "Marathon",
+      "licence": {
+        "model": "free"
+      },
+      "size": 131000,
+      "icon": "assets/gallery-1.0.0.2611221122.png",
+      "install": {
+        "kind": "marathon",
+        "app_id": "gallery",
+        "url": "https://github.com/patrickjquinn/marathon-updates/releases/download/apps/aarch64/gallery-1.0.0.2611221122.marathon",
+        "sha256": "475d1bdaa2a0d06915c4c6b5096956dac3df5a7919c74185a4535d3622ac1f8d",
+        "min_image": "26112202"
+      }
+    },
+    {
+      "name": "maps",
+      "version": "1.0.0.2611221122",
+      "title": "Maps",
+      "summary": "Find places and get directions",
+      "category": "Productivity",
+      "tested_on": [],
+      "publisher": "Marathon",
+      "licence": {
+        "model": "free"
+      },
+      "size": 463317,
+      "icon": "assets/maps-1.0.0.2611221122.png",
+      "install": {
+        "kind": "marathon",
+        "app_id": "maps",
+        "url": "https://github.com/patrickjquinn/marathon-updates/releases/download/apps/aarch64/maps-1.0.0.2611221122.marathon",
+        "sha256": "f3cb62e66c07550d0a775a293fda56bf7f49ad4309a53a52abd55adfbb61c6cb",
+        "min_image": "26112202"
+      }
+    },
+    {
+      "name": "music",
+      "version": "1.0.0.2611221122",
+      "title": "Music",
+      "summary": "Play and control the music on your phone",
+      "category": "Entertainment",
+      "tested_on": [],
+      "publisher": "Marathon",
+      "licence": {
+        "model": "free"
+      },
+      "size": 230026,
+      "icon": "assets/music-1.0.0.2611221122.png",
+      "install": {
+        "kind": "marathon",
+        "app_id": "music",
+        "url": "https://github.com/patrickjquinn/marathon-updates/releases/download/apps/aarch64/music-1.0.0.2611221122.marathon",
+        "sha256": "a572f2c9dfc59b6ca13c7982d1791441e12012e1f586494500d3ca6a8cb3b5cd",
+        "min_image": "26112202"
+      }
+    },
+    {
+      "name": "notes",
+      "version": "1.0.0.2611221122",
+      "title": "Notes",
+      "summary": "Write notes and find what you noted",
+      "category": "Productivity",
+      "tested_on": [],
+      "publisher": "Marathon",
+      "licence": {
+        "model": "free"
+      },
+      "size": 87021,
+      "icon": "assets/notes-1.0.0.2611221122.png",
+      "install": {
+        "kind": "marathon",
+        "app_id": "notes",
+        "url": "https://github.com/patrickjquinn/marathon-updates/releases/download/apps/aarch64/notes-1.0.0.2611221122.marathon",
+        "sha256": "21cad04debdb704d39ef1dad77fbecadde57475bc775d491e94ff2896d0aba1c",
+        "min_image": "26112202"
+      }
+    },
+    {
+      "name": "radio",
+      "version": "1.0.0.2611221122",
+      "title": "Radio",
+      "summary": "The world's radio on a globe, and FM from your headphones",
+      "category": "Entertainment",
+      "tested_on": [],
+      "publisher": "Marathon",
+      "licence": {
+        "model": "free"
+      },
+      "size": 756558,
+      "icon": "assets/radio-1.0.0.2611221122.png",
+      "install": {
+        "kind": "marathon",
+        "app_id": "radio",
+        "url": "https://github.com/patrickjquinn/marathon-updates/releases/download/apps/aarch64/radio-1.0.0.2611221122.marathon",
+        "sha256": "96cd607c93e0c78ec6a731b274d368fc163c4c4c6369bd61b3a579dc9636db5c",
+        "min_image": "26112202"
+      }
+    },
+    {
+      "name": "terminal",
+      "version": "1.0.0.2611221122",
+      "title": "Terminal",
+      "summary": "A command-line shell",
+      "category": "System",
+      "tested_on": [],
+      "publisher": "Marathon",
+      "licence": {
+        "model": "free"
+      },
+      "size": 136118,
+      "icon": "assets/terminal-1.0.0.2611221122.png",
+      "install": {
+        "kind": "marathon",
+        "app_id": "terminal",
+        "url": "https://github.com/patrickjquinn/marathon-updates/releases/download/apps/aarch64/terminal-1.0.0.2611221122.marathon",
+        "sha256": "0c46c903657a6f51dd2d769af147d8873fbf985887411668cbb395c82781a9fa",
+        "min_image": "26112202"
+      }
+    }
+  ],
+  "revision": 1795373902,
+  "generated_at": "2026-11-22T18:58:22Z"
 }
